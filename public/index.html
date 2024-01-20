@@ -1,31 +1,63 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
+  <head>
+    <meta charset="UTF-8" />
     <title>GitHub Repository Details</title>
-    <script>
-        async function getRepoDetails() {
-            const url = document.getElementById('repoUrl').value;
-            try {
-                const response = await fetch('/get-repo-details', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ url })
-                });
-                const data = await response.json();
-                document.getElementById('result').textContent = JSON.stringify(data, null, 2);
-            } catch (error) {
-                console.error('Error:', error);
-            }
+    <style>
+      #loadingIndicator {
+        display: inline-block;
+        width: 50px;
+        height: 50px;
+        border: 3px solid rgba(0, 0, 0, 0.3);
+        border-radius: 50%;
+        border-top-color: #000;
+        animation: spin 1s ease-in-out infinite;
+        -webkit-animation: spin 1s ease-in-out infinite;
+      }
+
+      @keyframes spin {
+        to {
+          -webkit-transform: rotate(360deg);
         }
+      }
+
+      @-webkit-keyframes spin {
+        to {
+          -webkit-transform: rotate(360deg);
+        }
+      }
+    </style>
+    <script>
+      async function getRepoDetails() {
+        const url = document.getElementById("repoUrl").value;
+        const loadingIndicator = document.getElementById("loadingIndicator");
+        const resultElement = document.getElementById("result");
+
+        try {
+          loadingIndicator.style.display = "block"; // Show loading indicator
+          const response = await fetch("/get-repo-details", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ url }),
+          });
+          const data = await response.json();
+          resultElement.textContent = JSON.stringify(data, null, 2);
+        } catch (error) {
+          console.error("Error:", error);
+          resultElement.textContent = "Error loading details";
+        } finally {
+          loadingIndicator.style.display = "none"; // Hide loading indicator
+        }
+      }
     </script>
-</head>
-<body>
+  </head>
+  <body>
     <h1>GitHub Repository Details</h1>
-    <input type="text" id="repoUrl" placeholder="Enter GitHub Repository URL">
+    <input type="text" id="repoUrl" placeholder="Enter GitHub Repository URL" />
     <button onclick="getRepoDetails()">Get Repo Details</button>
     <pre id="result"></pre>
-</body>
+    <div id="loadingIndicator" style="display: none">Verifying Repository...</div>
+  </body>
 </html>

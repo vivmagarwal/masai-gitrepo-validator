@@ -1,9 +1,10 @@
-const express = require("express");
-const axios = require("axios");
-const axiosRetry = require("axios-retry").default;
-const cors = require("cors");
-const path = require("path");
-const linkify = require("linkifyjs");
+import express from "express";
+import axios from "axios";
+import * as rax from "retry-axios";
+import cors from "cors";
+import path from "path";
+import linkify from "linkifyjs";
+
 const app = express();
 const port = 3000;
 
@@ -11,75 +12,57 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
-// Configure axios to use axios-retry
-// Custom retry delay
-// axiosRetry(axios, { retryDelay: (retryCount) => {
-//   return retryCount * 1000;
-// }});
+const raxConfig = {
+  retry: 3,
 
+  httpMethodsToRetry: ["GET", "HEAD", "OPTIONS", "DELETE", "PUT"],
 
-// Import and configure axios-retry
-// require('axios-retry')(axios, {
-//   retries: 3, // Define the number of retries
-//   retryDelay: (retryCount) => {
-//     return retryCount * 1000; // Delay in milliseconds
-//   }
-// });
+  retryCondition: (error) => {
+    return (
+      error.response &&
+      (error.response.status < 200 || error.response.status > 299)
+    );
+  },
 
-// Configure axios-retry directly
-// axiosRetry(axios, {
-//   retries: 3, // Number of retry attempts
-//   retryDelay: (retryCount) => {
-//     return retryCount * 1000; // Time interval between retries (1000 ms)
-//   }
-// });
+  backoffType: "exponential",
 
-axiosRetry(axios, { retries: 3 });
+  onRetryAttempt: (err) => {
+    const cfg = rax.getConfig(err);
+    console.log(
+      `Retry attempt #${cfg.currentRetryAttempt}: Retrying request to ${err.config.url}`
+    );
+  },
+};
 
-// Adding an interceptor to track the number of retries
-axios.interceptors.request.use(config => {
-  config.metadata = config.metadata || {};
-  config.metadata.startTime = new Date();
-  return config;
-}, error => {
-  return Promise.reject(error);
-});
+rax.attach();
 
 async function checkLink(url) {
-  let tries = 0;
+  let responseTime,
+    working,
+    tries = 0;
 
   try {
-    const response = await axios.get(url, {
-      // Adding a response interceptor
-      "axios-retry": {
-        onRetryAttempt: (err) => {
-          tries = err.config["axios-retry"].retryCount + 1;
-        },
-      },
-    });
+    const startTime = new Date();
+    const response = await axios.get(url, { raxConfig });
 
-    const endTime = new Date();
-    const responseTime = endTime - response.config.metadata.startTime; // Calculate response time
-
-    return {
-      working: response.status >= 200 && response.status < 300,
-      responseTime: `${responseTime}ms`,
-      tries: tries + 1, // Adding 1 for the initial try
-    };
+    responseTime = new Date() - startTime; // Calculate response time
+    working = response.status >= 200 && response.status < 300;
+    tries = response.config.raxConfig.currentRetryAttempt + 1 || 1; // +1 for the initial attempt
   } catch (error) {
     console.error("Error checking the link:", error.message);
-    return {
-      working: false,
-      responseTime: "N/A",
-      tries,
-    };
+    responseTime = "N/A";
+    working = false;
+    tries = error.config.raxConfig.currentRetryAttempt || 1;
   }
+
+  return {
+    working,
+    responseTime:
+      typeof responseTime === "number" ? `${responseTime}ms` : responseTime,
+    tries,
+  };
 }
 
-let globalResponse;
-let readmeContent = "";
-
-// Check if README exists
 async function checkReadmeExists(repoPath) {
   const readmeVariants = ["README.md", "readme.md", "Readme.md"];
   for (const variant of readmeVariants) {
@@ -87,16 +70,28 @@ async function checkReadmeExists(repoPath) {
       const readmeResponse = await axios.get(
         `https://api.github.com/repos/${repoPath}/contents/${variant}`
       );
-      readmeContent = Buffer.from(
+
+      const readmeContent = Buffer.from(
         readmeResponse.data.content,
         "base64"
       ).toString("utf-8");
-      return true; // Found the README
+
+      console.log(readmeContent);
+
+      if (readmeContent) {
+        return {
+          readmeExists: true,
+          readmeContent: readmeContent,
+        };
+      }
     } catch (error) {
       // Continue checking the next variant
     }
   }
-  return false; // README not found in any variant
+  return {
+    readmeExists: false,
+    readmeContent: null,
+  }; // README not found in any variant
 }
 
 function GetKeyValuesObject(readmeContent) {
@@ -118,7 +113,6 @@ function GetKeyValuesObject(readmeContent) {
 
   console.log(parsedData);
 
-
   const values = {
     array: parsedData,
 
@@ -131,7 +125,10 @@ function GetKeyValuesObject(readmeContent) {
 
     getLink: function (substring) {
       const item = this.array.find((element) =>
-        element.key.includes(substring)
+        element.key
+          .toLowerCase()
+          .trim()
+          .includes(substring.toLowerCase().trim())
       );
       if (item) {
         const links = linkify.find(item.value);
@@ -140,9 +137,12 @@ function GetKeyValuesObject(readmeContent) {
       return null;
     },
 
-    getLinkAsync: async function (substring) {
+    getLinkWithInfo: async function (substring) {
       const item = this.array.find((element) =>
-        element.key.includes(substring)
+        element.key
+          .toLowerCase()
+          .trim()
+          .includes(substring.toLowerCase().trim())
       );
       if (item) {
         const links = linkify.find(item.value);
@@ -164,9 +164,7 @@ function GetKeyValuesObject(readmeContent) {
   return values;
 }
 
-
-// Check project type
-function checkProjectType() {
+function checkProjectType(readmeContent) {
   try {
     const projectTypeMatch = readmeContent.match(
       /## Project Type\s*\n*- (Frontend|Backend|Fullstack)/i
@@ -180,38 +178,115 @@ function checkProjectType() {
   }
 }
 
-async function checkDeploymentDetails() {
+async function checkDeploymentDetails(readmeContent) {
   let keyValues = GetKeyValuesObject(readmeContent);
 
   let result = {};
 
-  let frontend = keyValues.get("frontend");
-  let backend = keyValues.getLink("backend");
-  let database = keyValues.get("database") || keyValues.get("db");
-  let key1 = keyValues.getLink("key1")
-  let key2 = keyValues.getLink("key2")
-  let key1Async = await keyValues.getLinkAsync("key1");
-  let backendAsync = await keyValues.getLinkAsync("backend");
+  // let a = keyValues.get("frontend");
+  // let b = keyValues.get("backend");
+  // let c = keyValues.getLink("database");
+  // let d = keyValues.getLink("key1");
+  // let e = keyValues.getLink("key2");
+  let frontend = await keyValues.getLinkWithInfo("frontend");
+  let backend = await keyValues.getLinkWithInfo("backend");
 
-  if (frontend) {
-    result.frontend = frontend;
-  }
-  if (backend) {
-    result.backend = backend;
-  }
-  if (database) {
-    result.database = database;
-  }
-
-  result.key1 = key1;
-  result.key2 = key2;
-  result.key1Async = key1Async;
-  result.backendAsync = backendAsync;
+  if (backend) result.backend = backend;
+  if (frontend) result.frontend = frontend;
 
   return result;
 }
 
-// API Endpoint
+function getHeaders(markdownContent) {
+  const lines = markdownContent.split("\n");
+  const headersWithContent = [];
+
+  let currentHeader = null;
+
+  lines.forEach((line, index) => {
+    // Check if the line is a header
+    const headerMatch = line.match(/^(#{1,5})\s*(.*)/);
+    if (headerMatch) {
+      if (currentHeader) {
+        // Save the previous header with its content
+        headersWithContent.push(currentHeader);
+      }
+      currentHeader = {
+        text: headerMatch[2].trim(),
+        level: headerMatch[1].length,
+        content: "",
+      };
+    } else if (currentHeader) {
+      // Accumulate content for the current header
+      currentHeader.content += line + (index < lines.length - 1 ? "\n" : "");
+    }
+  });
+
+  // Add the last header if exists
+  if (currentHeader) {
+    headersWithContent.push(currentHeader);
+  }
+
+  return {
+    headersWithContent: headersWithContent,
+
+    exists: function (substring) {
+      const normalizedSubstring = substring.trim().toLowerCase();
+      const header = this.headersWithContent.find((h) =>
+        h.text.trim().toLowerCase().includes(normalizedSubstring)
+      );
+      return header
+        ? {
+            exists: true,
+            text: header.text,
+            level: header.level,
+            content: header.content.trim(),
+          }
+        : {
+            exists: false,
+            text: null,
+            level: null,
+            content: null,
+          };
+    },
+
+    contains: function (keySubstring, valueSubstring) {
+      const normalizedKeySubstring = keySubstring.toLowerCase();
+      const normalizedValueSubstring = valueSubstring.toLowerCase();
+
+      return this.headersWithContent
+        .filter(
+          (header) =>
+            header.text.toLowerCase().includes(normalizedKeySubstring) &&
+            header.content.toLowerCase().includes(normalizedValueSubstring)
+        )
+        .map((header) => ({
+          text: header.text,
+          level: header.level,
+          content: header.content.trim(),
+        }));
+    },
+  };
+}
+
+function getHeaderDetails(readmeContent) {
+  let headers = getHeaders(readmeContent);
+  let result = {};
+
+  result.project_type_exists = headers.exists("Project Type").exists;
+  result.deployed_app_exists = headers.exists("Deployed App").exists;
+  result.video_walkthrough_exists = headers.exists("Video Walkthrough").exists;
+  result.technology_stack_exists = headers.exists("Technology Stack").exists;
+  result.getting_started_exists = headers.exists("Getting started").exists;
+  result.features_exists = headers.exists("Features").exists;
+
+  result.is_frontend = headers.contains("Project Type", "frontend");
+  result.is_backend = headers.contains("Project Type", "backend");
+  result.is_fullstack = headers.contains("Project Type", "fullstack");
+
+  return result;
+}
+
 app.post("/get-repo-details", async (req, res) => {
   const repoUrl = req.body.url;
 
@@ -221,16 +296,17 @@ app.post("/get-repo-details", async (req, res) => {
 
   try {
     const repoPath = new URL(repoUrl).pathname.substring(1);
-    
-    globalResponse = await axios.get(
+
+    const { data } = await axios.get(
       `https://api.github.com/repos/${repoPath}`
     );
-    
-    const { data } = globalResponse;
+    const { readmeExists, readmeContent } = await checkReadmeExists(repoPath);
 
-    const readmeExists = await checkReadmeExists(repoPath);
-    const projectType = readmeExists && checkProjectType();
-    const deploymentDetails = readmeExists && await checkDeploymentDetails() 
+    const projectType = readmeExists && checkProjectType(readmeContent);
+    const deploymentDetails =
+      readmeExists && (await checkDeploymentDetails(readmeContent));
+
+    const headerDetails = readmeExists && getHeaderDetails(readmeContent);
 
     const repoDetails = {
       name: data.name,
@@ -242,6 +318,8 @@ app.post("/get-repo-details", async (req, res) => {
       readme_exists: readmeExists,
       project_type: projectType,
       deployment_details: deploymentDetails,
+      heading_details: headerDetails,
+      all_headers: getHeaders(readmeContent),
     };
 
     res.send(repoDetails);
