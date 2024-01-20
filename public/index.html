@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>GitHub Repository Details</title>
+    <script>
+        async function getRepoDetails() {
+            const url = document.getElementById('repoUrl').value;
+            try {
+                const response = await fetch('/get-repo-details', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ url })
+                });
+                const data = await response.json();
+                document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+    </script>
+</head>
+<body>
+    <h1>GitHub Repository Details</h1>
+    <input type="text" id="repoUrl" placeholder="Enter GitHub Repository URL">
+    <button onclick="getRepoDetails()">Get Repo Details</button>
+    <pre id="result"></pre>
+</body>
+</html>
