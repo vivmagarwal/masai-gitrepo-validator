@@ -1,63 +1,113 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
+<head>
     <meta charset="UTF-8" />
     <title>GitHub Repository Details</title>
     <style>
-      #loadingIndicator {
-        display: inline-block;
-        width: 50px;
-        height: 50px;
-        border: 3px solid rgba(0, 0, 0, 0.3);
-        border-radius: 50%;
-        border-top-color: #000;
-        animation: spin 1s ease-in-out infinite;
-        -webkit-animation: spin 1s ease-in-out infinite;
-      }
-
-      @keyframes spin {
-        to {
-          -webkit-transform: rotate(360deg);
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+            color: #333;
         }
-      }
 
-      @-webkit-keyframes spin {
-        to {
-          -webkit-transform: rotate(360deg);
+        h1 {
+            color: #333;
         }
-      }
+
+        .git-repo-input {
+            padding: 10px;
+            margin: 10px 0;
+            width: 500px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        #loadingIndicator {
+            display: inline-block;
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(0, 0, 0, 0.3);
+            border-radius: 50%;
+            border-top-color: #000;
+            animation: spin 1s ease-in-out infinite;
+            -webkit-animation: spin 1s ease-in-out infinite;
+            margin: 10px 0;
+        }
+
+        @keyframes spin {
+            to {
+                -webkit-transform: rotate(360deg);
+            }
+        }
+
+        @-webkit-keyframes spin {
+            to {
+                -webkit-transform: rotate(360deg);
+            }
+        }
+
+        pre {
+            background-color: #fff;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 4px;
+            overflow: auto;
+            max-height: 400px;
+        }
+
+        sub {
+            color: #666;
+        }
     </style>
-    <script>
-      async function getRepoDetails() {
-        const url = document.getElementById("repoUrl").value;
-        const loadingIndicator = document.getElementById("loadingIndicator");
-        const resultElement = document.getElementById("result");
-
-        try {
-          loadingIndicator.style.display = "block"; // Show loading indicator
-          const response = await fetch("/get-repo-details", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ url }),
-          });
-          const data = await response.json();
-          resultElement.textContent = JSON.stringify(data, null, 2);
-        } catch (error) {
-          console.error("Error:", error);
-          resultElement.textContent = "Error loading details";
-        } finally {
-          loadingIndicator.style.display = "none"; // Hide loading indicator
-        }
-      }
-    </script>
-  </head>
-  <body>
+</head>
+<body>
     <h1>GitHub Repository Details</h1>
-    <input type="text" id="repoUrl" placeholder="Enter GitHub Repository URL" />
+    <input class="git-repo-input" type="text" id="repoUrl" placeholder="Enter GitHub Repository URL" />
+    <div><sub>try with: https://github.com/vivmagarwal/masai-templates</sub></div>
     <button onclick="getRepoDetails()">Get Repo Details</button>
     <pre id="result"></pre>
     <div id="loadingIndicator" style="display: none">Verifying Repository...</div>
-  </body>
+
+    <script>
+        async function getRepoDetails() {
+            const url = document.getElementById("repoUrl").value;
+            const loadingIndicator = document.getElementById("loadingIndicator");
+            const resultElement = document.getElementById("result");
+
+            try {
+                loadingIndicator.style.display = "block"; // Show loading indicator
+                const response = await fetch("/get-repo-details", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ url }),
+                });
+                const data = await response.json();
+                resultElement.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                console.error("Error:", error);
+                resultElement.textContent = "Error loading details";
+            } finally {
+                loadingIndicator.style.display = "none"; // Hide loading indicator
+            }
+        }
+    </script>
+</body>
 </html>
