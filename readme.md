@@ -7,17 +7,13 @@ The GitHub Repo Analyzer is an application designed to provide insights into Git
 - Fullstack
 
 ## Deployed App
-- Frontend: [Frontend Deployment](https://tiny-plum-crow-cuff.cyclic.app/)
-- Backend: [Backend Deployment](https://nice-outfit-tuna.cyclic.app/users/register)
-- Database: [Database Access](https://deployed-site.whatever)
+- Frontend: [Frontend Deployment](https://rose-puffer-hose.cyclic.app/)
+- Backend: [Backend Deployment](https://nice-outfit-tuna.cyclic.app/get-repo-details)
 
 ## Directory Structure
 ```
 github-repo-analyzer/
-├─ server/
-│  ├─ controllers/
-│  ├─ routes/
-│  ├─ utils/
+├─ app.js
 ├─ public/
 │  ├─ index.html
 ```
