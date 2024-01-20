@@ -284,6 +284,8 @@ function getHeaderDetails(readmeContent) {
   result.is_backend = headers.contains("Project Type", "backend");
   result.is_fullstack = headers.contains("Project Type", "fullstack");
 
+  // result.all_headers = headers;
+
   return result;
 }
 
@@ -319,7 +321,6 @@ app.post("/get-repo-details", async (req, res) => {
       project_type: projectType,
       deployment_details: deploymentDetails,
       heading_details: headerDetails,
-      all_headers: getHeaders(readmeContent),
     };
 
     res.send(repoDetails);
